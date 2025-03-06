@@ -8,7 +8,6 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from docx import Document
-import openai
 
 # API ключи из переменных окружения
 API_TOKEN = os.getenv("API_TOKEN")
@@ -50,12 +49,18 @@ class Form(StatesGroup):
     technologies = State()
     additional = State()
 
-# Функция обработки голосовых сообщений
+# Функция обработки голосовых сообщений (Telegram автоматически транскрибирует голос)
 async def process_voice_message(message: types.Message):
     file = await bot.get_file(message.voice.file_id)
     file_path = file.file_path
-    voice_text = "(Аудио-ответ: см. запись)"  # Telegram сам транскрибирует, но мы пока пишем заглушку
+    voice_text = "(Аудио-ответ: см. запись)"  # Telegram может автоматически обрабатывать текст, но API пока не поддерживает это
     return voice_text
+
+# Универсальный обработчик текстовых и голосовых сообщений
+async def handle_input(message: types.Message):
+    if message.voice:
+        return await process_voice_message(message)
+    return message.text
 
 # Команда /start
 @dp.message_handler(commands=['start'])
@@ -63,13 +68,10 @@ async def start(message: types.Message):
     await message.answer("Привет! Я помогу составить подробное техническое задание на ваш продукт. Давайте начнем!\n\nКакова основная цель вашего продукта? (Например: автоматизация продаж, удобный чат-бот для поддержки, маркетинговый инструмент и т.д.)")
     await Form.business_goal.set()
 
-# Вопросы по продукту с голосовым вводом
+# Вопросы по продукту с поддержкой голосового ввода
 @dp.message_handler(state=Form.business_goal, content_types=[types.ContentType.TEXT, types.ContentType.VOICE])
 async def process_business_goal(message: types.Message, state: FSMContext):
-    if message.voice:
-        text = await process_voice_message(message)
-    else:
-        text = message.text
+    text = await handle_input(message)
     async with state.proxy() as data:
         data['business_goal'] = text
     await message.answer("Какие основные функции должны быть в приложении/боте? Опишите подробно.")
@@ -77,10 +79,7 @@ async def process_business_goal(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=Form.key_features, content_types=[types.ContentType.TEXT, types.ContentType.VOICE])
 async def process_key_features(message: types.Message, state: FSMContext):
-    if message.voice:
-        text = await process_voice_message(message)
-    else:
-        text = message.text
+    text = await handle_input(message)
     async with state.proxy() as data:
         data['key_features'] = text
     await message.answer("Какие сервисы и API нужно интегрировать? (например, CRM, платежные системы, OpenAI и т.д.)")
@@ -88,10 +87,7 @@ async def process_key_features(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=Form.integrations, content_types=[types.ContentType.TEXT, types.ContentType.VOICE])
 async def process_integrations(message: types.Message, state: FSMContext):
-    if message.voice:
-        text = await process_voice_message(message)
-    else:
-        text = message.text
+    text = await handle_input(message)
     async with state.proxy() as data:
         data['integrations'] = text
     await message.answer("Кто ваша основная целевая аудитория? (Малый бизнес, B2B, B2C, маркетологи и т.д.)")
@@ -99,10 +95,7 @@ async def process_integrations(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=Form.target_audience, content_types=[types.ContentType.TEXT, types.ContentType.VOICE])
 async def process_target_audience(message: types.Message, state: FSMContext):
-    if message.voice:
-        text = await process_voice_message(message)
-    else:
-        text = message.text
+    text = await handle_input(message)
     async with state.proxy() as data:
         data['target_audience'] = text
     await message.answer("Как планируется монетизация? (Подписка, разовая покупка, реклама и т.д.)")
@@ -110,10 +103,7 @@ async def process_target_audience(message: types.Message, state: FSMContext):
 
 @dp.message_handler(state=Form.monetization, content_types=[types.ContentType.TEXT, types.ContentType.VOICE])
 async def process_monetization(message: types.Message, state: FSMContext):
-    if message.voice:
-        text = await process_voice_message(message)
-    else:
-        text = message.text
+    text = await handle_input(message)
     async with state.proxy() as data:
         data['monetization'] = text
     await generate_tz(message, state)
@@ -145,3 +135,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
