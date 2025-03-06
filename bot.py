@@ -14,6 +14,12 @@ import openai
 API_TOKEN = os.getenv("7988014920:AAEmLTfuLIYLWuWonaqSvkkEzXr4mJWTti0")
 OPENAI_API_KEY = os.getenv("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")
 
+# Проверяем, есть ли токен
+if not API_TOKEN:
+    raise ValueError("❌ Ошибка: API_TOKEN не найден! Проверь настройки Render.")
+
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot)
 # Логирование
 logging.basicConfig(level=logging.INFO)
 
