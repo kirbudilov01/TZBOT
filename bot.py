@@ -11,17 +11,9 @@ from docx import Document
 import openai
 
 # API ключи из переменных окружения
-API_TOKEN = os.getenv("API_TOKEN")  
+API_TOKEN = os.getenv("API_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-if not API_TOKEN:
-    raise ValueError("❌ Ошибка: API_TOKEN не найден! Проверь настройки Render.")
-# Проверяем, есть ли токен
-if not API_TOKEN:
-    raise ValueError("❌ Ошибка: API_TOKEN не найден! Проверь настройки Render.")
-
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
 # Логирование
 logging.basicConfig(level=logging.INFO)
 
@@ -40,6 +32,8 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS requests (
     integrations TEXT,
     target_audience TEXT,
     monetization TEXT,
+    security TEXT,
+    technologies TEXT,
     additional_questions TEXT,
     generated_tz TEXT
 )''')
@@ -52,68 +46,88 @@ class Form(StatesGroup):
     integrations = State()
     target_audience = State()
     monetization = State()
+    security = State()
+    technologies = State()
     additional = State()
+
+# Функция обработки голосовых сообщений
+async def process_voice_message(message: types.Message):
+    file = await bot.get_file(message.voice.file_id)
+    file_path = file.file_path
+    voice_text = "(Аудио-ответ: см. запись)"  # Telegram сам транскрибирует, но мы пока пишем заглушку
+    return voice_text
 
 # Команда /start
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
-    await message.answer("Привет! Я помогу составить техническое задание на веб-приложение или бота. Начнем с главного вопроса: Какая основная цель вашего продукта? (Например: автоматизация заказов, поддержка клиентов, маркетинг и т.д.)")
+    await message.answer("Привет! Я помогу составить подробное техническое задание на ваш продукт. Давайте начнем!\n\nКакова основная цель вашего продукта? (Например: автоматизация продаж, удобный чат-бот для поддержки, маркетинговый инструмент и т.д.)")
     await Form.business_goal.set()
 
-# Вопрос 1: Цель бизнеса
+# Вопросы по продукту с голосовым вводом
 @dp.message_handler(state=Form.business_goal, content_types=[types.ContentType.TEXT, types.ContentType.VOICE])
 async def process_business_goal(message: types.Message, state: FSMContext):
     if message.voice:
-        file = await bot.get_file(message.voice.file_id)
-        text = "(Аудио-ответ: см. запись)"
+        text = await process_voice_message(message)
     else:
         text = message.text
     async with state.proxy() as data:
         data['business_goal'] = text
-    await message.answer("Какие ключевые функции должны быть у вашего веб-приложения или бота? (Например: чат, CRM-система, онлайн-оплата, аналитика)")
+    await message.answer("Какие основные функции должны быть в приложении/боте? Опишите подробно.")
     await Form.key_features.set()
 
-# Вопрос 2: Основные функции
-@dp.message_handler(state=Form.key_features)
+@dp.message_handler(state=Form.key_features, content_types=[types.ContentType.TEXT, types.ContentType.VOICE])
 async def process_key_features(message: types.Message, state: FSMContext):
+    if message.voice:
+        text = await process_voice_message(message)
+    else:
+        text = message.text
     async with state.proxy() as data:
-        data['key_features'] = message.text
-    await message.answer("Какие внешние сервисы или API вам нужно интегрировать? (Например: платежные системы, CRM, AI-боты, маркетинговые платформы)")
+        data['key_features'] = text
+    await message.answer("Какие сервисы и API нужно интегрировать? (например, CRM, платежные системы, OpenAI и т.д.)")
     await Form.integrations.set()
 
-# Вопрос 3: Интеграции
-@dp.message_handler(state=Form.integrations)
+@dp.message_handler(state=Form.integrations, content_types=[types.ContentType.TEXT, types.ContentType.VOICE])
 async def process_integrations(message: types.Message, state: FSMContext):
+    if message.voice:
+        text = await process_voice_message(message)
+    else:
+        text = message.text
     async with state.proxy() as data:
-        data['integrations'] = message.text
-    await message.answer("Кто ваша основная целевая аудитория? (Например: малый бизнес, корпоративные клиенты, конечные пользователи)")
+        data['integrations'] = text
+    await message.answer("Кто ваша основная целевая аудитория? (Малый бизнес, B2B, B2C, маркетологи и т.д.)")
     await Form.target_audience.set()
 
-# Вопрос 4: Целевая аудитория
-@dp.message_handler(state=Form.target_audience)
+@dp.message_handler(state=Form.target_audience, content_types=[types.ContentType.TEXT, types.ContentType.VOICE])
 async def process_target_audience(message: types.Message, state: FSMContext):
+    if message.voice:
+        text = await process_voice_message(message)
+    else:
+        text = message.text
     async with state.proxy() as data:
-        data['target_audience'] = message.text
-    await message.answer("Как вы планируете монетизировать продукт? (Например: подписка, разовая оплата, freemium-модель)")
+        data['target_audience'] = text
+    await message.answer("Как планируется монетизация? (Подписка, разовая покупка, реклама и т.д.)")
     await Form.monetization.set()
 
-# Вопрос 5: Монетизация
-@dp.message_handler(state=Form.monetization)
+@dp.message_handler(state=Form.monetization, content_types=[types.ContentType.TEXT, types.ContentType.VOICE])
 async def process_monetization(message: types.Message, state: FSMContext):
+    if message.voice:
+        text = await process_voice_message(message)
+    else:
+        text = message.text
     async with state.proxy() as data:
-        data['monetization'] = message.text
+        data['monetization'] = text
     await generate_tz(message, state)
 
-# Генерация документа с ТЗ
+# Генерация документа ТЗ
 async def generate_tz(message, state):
     async with state.proxy() as data:
         document = Document()
         document.add_heading("Техническое задание", level=1)
-        document.add_paragraph(f"📌 Основная цель: {data['business_goal']}")
-        document.add_paragraph(f"🔹 Ключевые функции: {data['key_features']}")
-        document.add_paragraph(f"🔗 Интеграции: {data['integrations']}")
-        document.add_paragraph(f"🎯 Целевая аудитория: {data['target_audience']}")
-        document.add_paragraph(f"💰 Монетизация: {data['monetization']}")
+        document.add_paragraph(f"1. Цель продукта:\n{data['business_goal']}")
+        document.add_paragraph(f"2. Основные функции:\n{data['key_features']}")
+        document.add_paragraph(f"3. Интеграции:\n{data['integrations']}")
+        document.add_paragraph(f"4. Целевая аудитория:\n{data['target_audience']}")
+        document.add_paragraph(f"5. Монетизация:\n{data['monetization']}")
         
         file_path = f"tz_{message.from_user.id}.docx"
         document.save(file_path)
