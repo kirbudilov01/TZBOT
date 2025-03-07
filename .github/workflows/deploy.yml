@@ -1,0 +1,26 @@
+name: Deploy Telegram Bot to VPS
+
+on:
+  push:
+    branches:
+      - main  # Запуск деплоя при каждом пуше в main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Клонируем репозиторий
+        uses: actions/checkout@v3
+
+      - name: 🚀 Подключаемся к серверу и деплоим
+        run: |
+          ssh -o StrictHostKeyChecking=no root@${{ secrets.SERVER_IP }} << 'EOF'
+          cd ~/bot || git clone https://github.com/${{ github.repository }} ~/bot
+          cd ~/bot
+          git pull origin main
+          pip install -r requirements.txt
+          echo "API_TOKEN=${{ secrets.API_TOKEN }}" > .env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
+          sudo systemctl restart bot || python3 bot.py &
+          EOF
