@@ -8,6 +8,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from docx import Document
+import openai
 
 # API ключи из переменных окружения
 API_TOKEN = os.getenv("API_TOKEN")
@@ -52,7 +53,7 @@ class Form(StatesGroup):
 # Команда /start
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
-    await message.answer("Привет! Я помогу составить подробное техническое задание на ваш продукт. Давайте начнем!\n\nКакова основная цель вашего продукта? (Например: автоматизация продаж, удобный чат-бот для поддержки, маркетинговый инструмент и т.д.)")
+    await message.answer("Привет! Я помогу составить детальное техническое задание. Давайте начнем!\n\nКакова основная цель вашего продукта? (Например: автоматизация продаж, чат-бот для поддержки, маркетинговый инструмент и т.д.)")
     await Form.business_goal.set()
 
 # Вопросы по продукту
@@ -60,7 +61,7 @@ async def start(message: types.Message):
 async def process_business_goal(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['business_goal'] = message.text
-    await message.answer("Какие основные функции должны быть в приложении/боте? Опишите подробно.")
+    await message.answer("Какие основные функции должны быть в приложении/боте? Опишите максимально подробно.")
     await Form.key_features.set()
 
 @dp.message_handler(state=Form.key_features)
@@ -90,22 +91,42 @@ async def process_monetization(message: types.Message, state: FSMContext):
         data['monetization'] = message.text
     await generate_tz(message, state)
 
-# Генерация документа ТЗ
+# Генерация развернутого ТЗ через GPT-4
 async def generate_tz(message, state):
     async with state.proxy() as data:
+        prompt = f"""
+        Составь детальное техническое задание на основе следующих данных:
+        Цель продукта: {data['business_goal']}
+        Основные функции: {data['key_features']}
+        Интеграции: {data['integrations']}
+        Целевая аудитория: {data['target_audience']}
+        Монетизация: {data['monetization']}
+        
+        Используй формат:
+        1. Введение
+        2. Описание продукта
+        3. Функционал
+        4. Технологический стек
+        5. Монетизация
+        6. Безопасность
+        
+        Сделай текст развернутым, как в примере документа.
+        """
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        generated_text = response["choices"][0]["message"]["content"]
+        
         document = Document()
         document.add_heading("Техническое задание", level=1)
-        document.add_paragraph(f"1. Цель продукта:\n{data['business_goal']}")
-        document.add_paragraph(f"2. Основные функции:\n{data['key_features']}")
-        document.add_paragraph(f"3. Интеграции:\n{data['integrations']}")
-        document.add_paragraph(f"4. Целевая аудитория:\n{data['target_audience']}")
-        document.add_paragraph(f"5. Монетизация:\n{data['monetization']}")
+        document.add_paragraph(generated_text)
         
         file_path = f"tz_{message.from_user.id}.docx"
         document.save(file_path)
         
         with open(file_path, "rb") as file:
-            await message.answer("Спасибо! Вот ваше техническое задание:")
+            await message.answer("Спасибо! Вот ваше детальное техническое задание:")
             await bot.send_document(message.chat.id, file)
         
         os.remove(file_path)
